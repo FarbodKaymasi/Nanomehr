@@ -1,0 +1,541 @@
+import { Hono } from "npm:hono";
+import { cors } from "npm:hono/cors";
+import { logger } from "npm:hono/logger";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import * as kv from "./kv_store.tsx";
+
+const app = new Hono();
+
+// Create Supabase client
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+);
+
+// Enable logger
+app.use('*', logger(console.log));
+
+// Enable CORS for all routes and methods
+app.use(
+  "/*",
+  cors({
+    origin: "*",
+    allowHeaders: ["Content-Type", "Authorization"],
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    exposeHeaders: ["Content-Length"],
+    maxAge: 600,
+  }),
+);
+
+// ============= Authentication Middleware =============
+async function authenticateUser(authHeader: string | undefined) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return { authorized: false, userId: null };
+  }
+  
+  const accessToken = authHeader.split(' ')[1];
+  const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+  
+  if (error || !user) {
+    return { authorized: false, userId: null };
+  }
+  
+  return { authorized: true, userId: user.id };
+}
+
+// ============= Health Check =============
+app.get("/make-server-008a3150/health", (c) => {
+  return c.json({ status: "ok" });
+});
+
+// ============= AUTH ROUTES =============
+
+// Sign Up
+app.post("/make-server-008a3150/auth/signup", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { email, password, name } = body;
+
+    if (!email || !password || !name) {
+      return c.json({ error: 'Missing required fields' }, 400);
+    }
+
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      user_metadata: { name },
+      // Automatically confirm the user's email since an email server hasn't been configured.
+      email_confirm: true
+    });
+
+    if (error) {
+      console.log('Signup error:', error);
+      return c.json({ error: error.message }, 400);
+    }
+
+    return c.json({ user: data.user });
+  } catch (error) {
+    console.log('Signup exception:', error);
+    return c.json({ error: 'Internal server error during signup' }, 500);
+  }
+});
+
+// Sign In
+app.post("/make-server-008a3150/auth/signin", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { email, password } = body;
+
+    if (!email || !password) {
+      return c.json({ error: 'Missing email or password' }, 400);
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    );
+
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      console.log('Signin error:', error);
+      return c.json({ error: error.message }, 401);
+    }
+
+    return c.json({ 
+      access_token: data.session?.access_token,
+      user: data.user 
+    });
+  } catch (error) {
+    console.log('Signin exception:', error);
+    return c.json({ error: 'Internal server error during signin' }, 500);
+  }
+});
+
+// Get Current User
+app.get("/make-server-008a3150/auth/me", async (c) => {
+  const authHeader = c.req.header('Authorization');
+  const { authorized, userId } = await authenticateUser(authHeader);
+
+  if (!authorized) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const supabaseClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+  );
+
+  const accessToken = authHeader!.split(' ')[1];
+  const { data: { user }, error } = await supabaseClient.auth.getUser(accessToken);
+
+  if (error) {
+    return c.json({ error: 'Failed to get user' }, 401);
+  }
+
+  return c.json({ user });
+});
+
+// ============= CMS CONTENT ROUTES =============
+
+// Get all content (public)
+app.get("/make-server-008a3150/cms/content", async (c) => {
+  try {
+    const contentKeys = [
+      'cms:hero',
+      'cms:stats',
+      'cms:services',
+      'cms:products',
+      'cms:about',
+      'cms:customers',
+      'cms:contact',
+      'cms:footer',
+      'cms:settings'
+    ];
+
+    const contents = await kv.mget(contentKeys);
+    
+    const contentMap: Record<string, any> = {};
+    contentKeys.forEach((key, index) => {
+      const shortKey = key.replace('cms:', '');
+      contentMap[shortKey] = contents[index] || null;
+    });
+
+    return c.json(contentMap);
+  } catch (error) {
+    console.log('Error fetching content:', error);
+    return c.json({ error: 'Failed to fetch content' }, 500);
+  }
+});
+
+// Get specific content section (public)
+app.get("/make-server-008a3150/cms/content/:section", async (c) => {
+  try {
+    const section = c.req.param('section');
+    const content = await kv.get(`cms:${section}`);
+    
+    if (!content) {
+      return c.json({ error: 'Content not found' }, 404);
+    }
+
+    return c.json({ section, content });
+  } catch (error) {
+    console.log('Error fetching section content:', error);
+    return c.json({ error: 'Failed to fetch section content' }, 500);
+  }
+});
+
+// Update content section (protected)
+app.put("/make-server-008a3150/cms/content/:section", async (c) => {
+  const authHeader = c.req.header('Authorization');
+  const { authorized } = await authenticateUser(authHeader);
+
+  if (!authorized) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const section = c.req.param('section');
+    const body = await c.req.json();
+
+    await kv.set(`cms:${section}`, body.content);
+
+    return c.json({ 
+      success: true, 
+      message: `Content section '${section}' updated successfully` 
+    });
+  } catch (error) {
+    console.log('Error updating content:', error);
+    return c.json({ error: 'Failed to update content' }, 500);
+  }
+});
+
+// Initialize default content (protected)
+app.post("/make-server-008a3150/cms/initialize", async (c) => {
+  const authHeader = c.req.header('Authorization');
+  const { authorized } = await authenticateUser(authHeader);
+
+  if (!authorized) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const defaultContent = {
+      'cms:hero': {
+        title: 'نانومهر',
+        subtitle: 'پیشرو در تولید و توزیع مواد شیمیایی صنعتی و راهکارهای نرم افزاری',
+        description: 'با بیش از دو دهه تجربه در صنعت شیمی و فناوری، نانومهر ارائه‌دهنده محصولات و خدمات با کیفیت به صنایع مختلف است',
+        backgroundImage: 'https://images.unsplash.com/photo-1768564206500-5cddb1fea679?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjaGVtaWNhbCUyMHBsYW50JTIwcmVmaW5lcnklMjBpbmR1c3RyeXxlbnwxfHx8fDE3Njk2MjkyNDJ8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral'
+      },
+      'cms:stats': [
+        { number: '2000+', label: 'مشتری فعال' },
+        { number: '500+', label: 'پروژه موفق' },
+        { number: '15+', label: 'سال تجربه' },
+        { number: '50+', label: 'کارشناس متخصص' }
+      ],
+      'cms:services': [
+        {
+          id: 'polymer',
+          image: 'https://images.unsplash.com/photo-1722440814333-51292da1c59f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwb2x5bWVyJTIwcGxhc3RpYyUyMG1hdGVyaWFscyUyMHByb2R1Y3Rpb258ZW58MXx8fHwxNzY5NjI5MjQwfDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
+          title: 'مواد پلیمری',
+          number: '01',
+          description: 'تولید و توزیع انواع پلیمرهای صنعتی شامل پلی‌اتیلن، پلی‌پروپیلن و رزین‌های تخصصی با بالاترین کیفیت'
+        },
+        {
+          id: 'paint',
+          image: 'https://images.unsplash.com/photo-1768796369926-2e25a1e4fc9b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxpbmR1c3RyaWFsJTIwcGFpbnQlMjBjb2F0aW5ncyUyMGZhY3Rvcnl8ZW58MXx8fHwxNzY5NjI5MjQxfDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
+          title: 'رنگ‌های صنعتی',
+          number: '02',
+          description: 'رنگ‌های صنعتی، پوشش‌های محافظتی و رنگ‌های خودرویی با استانداردهای بین‌المللی'
+        },
+        {
+          id: 'fertilizer',
+          image: 'https://images.unsplash.com/photo-1557505482-fb5252df1d67?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhZ3JpY3VsdHVyYWwlMjBmZXJ0aWxpemVyJTIwY2hlbWljYWxzfGVufDF8fHx8MTc2OTYyOTI0MXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
+          title: 'کود و سموم',
+          number: '03',
+          description: 'تولید کودهای شیمیایی، آفت‌کش‌ها و سموم کشاورزی برای افزایش بهره‌وری محصولات کشاورزی'
+        },
+        {
+          id: 'software',
+          image: 'https://images.unsplash.com/photo-1763568258533-d0597f86ce62?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzb2Z0d2FyZSUyMGRldmVsb3BtZW50JTIwaW5kdXN0cmlhbCUyMGF1dG9tYXRpb24lMjB0ZWNobm9sb2d5fGVufDF8fHx8MTc3MTE4NDk3OHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
+          title: 'نرم افزارهای مرتبط با صنعت',
+          number: '04',
+          description: 'طراحی و توسعه نرم افزارهای تخصصی مدیریت تولید، کنترل کیفیت و اتوماسیون صنعتی'
+        }
+      ],
+      'cms:products': {
+        polymer: {
+          title: 'مواد پلیمری',
+          subtitle: 'تولید و توزیع انواع پلیمرهای صنعتی',
+          heroImage: 'https://images.unsplash.com/photo-1722440814333-51292da1c59f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwb2x5bWVyJTIwcGxhc3RpYyUyMG1hdGVyaWFscyUyMHByb2R1Y3Rpb258ZW58MXx8fHwxNzY5NjI5MjQwfDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
+          description: 'شرکت نانومهر با بهره‌گیری از جدیدترین تکنولوژی‌های روز دنیا، در زمینه تولید و توزیع انواع مواد پلیمری فعالیت می‌کند.',
+          features: [
+            'پلی‌اتیلن با چگالی بالا (HDPE)',
+            'پلی‌اتیلن با چگالی پایین (LDPE)',
+            'پلی‌پروپیلن (PP) گرید تزریقی و فیلم'
+          ],
+          applications: [
+            'صنایع بسته‌بندی و فیلم',
+            'تولید قطعات خودرو',
+            'لوازم خانگی و الکترونیک'
+          ],
+          specifications: {
+            'استانداردهای کیفی': 'ISO 9001:2015, ASTM',
+            'بسته‌بندی': 'کیسه 25 کیلوگرمی',
+            'مدت ماندگاری': '24 ماه از تاریخ تولید'
+          }
+        },
+        paint: {
+          title: 'رنگ‌های صنعتی',
+          subtitle: 'پوشش‌های حرفه‌ای برای صنایع مختلف',
+          heroImage: 'https://images.unsplash.com/photo-1768796369926-2e25a1e4fc9b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxpbmR1c3RyaWFsJTIwcGFpbnQlMjBjb2F0aW5ncyUyMGZhY3Rvcnl8ZW58MXx8fHwxNzY5NjI5MjQxfDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
+          description: 'رنگ‌های صنعتی نانومهر با فرمولاسیون پیشرفته و استفاده از مواد اولیه با کیفیت، دوام و مقاومت بالایی دارند.',
+          features: [
+            'رنگ‌های اپوکسی صنعتی',
+            'رنگ‌های پلی‌اورتان دو جزئی',
+            'پوشش‌های ضد خورندگی'
+          ],
+          applications: [
+            'صنایع نفت، گاز و پتروشیمی',
+            'صنایع خودروسازی',
+            'سازه‌های فلزی و فولادی'
+          ],
+          specifications: {
+            'استانداردهای کیفی': 'ISO 12944, SSPC',
+            'بسته‌بندی': 'سطل 4-20 لیتری',
+            'مدت ماندگاری': '12-18 ماه'
+          }
+        },
+        fertilizer: {
+          title: 'کود و سموم کشاورزی',
+          subtitle: 'محصولات تخصصی برای افزایش بهره‌وری',
+          heroImage: 'https://images.unsplash.com/photo-1557505482-fb5252df1d67?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhZ3JpY3VsdHVyYWwlMjBmZXJ0aWxpemVyJTIwY2hlbWljYWxzfGVufDF8fHx8MTc2OTYyOTI0MXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
+          description: 'نانومهر با ارائه کودهای شیمیایی و سموم کشاورزی با کیفیت، در افزایش عملکرد محصولات کشاورزی نقش مهمی ایفا می‌کند.',
+          features: [
+            'کودهای ازته (اوره، نیترات آمونیوم)',
+            'کودهای فسفاته (سوپرفسفات)',
+            'آفت‌کش‌های حشره‌کش و قارچ‌کش'
+          ],
+          applications: [
+            'کشاورزی و زراعت',
+            'باغداری و نگهداری فضای سبز',
+            'گلخانه‌های تولیدی'
+          ],
+          specifications: {
+            'استانداردهای کیفی': 'FAO, EU Regulations',
+            'بسته‌بندی': 'کیسه 25-50 کیلوگرمی',
+            'مدت ماندگاری': '12-36 ماه'
+          }
+        },
+        software: {
+          title: 'نرم افزارهای مرتبط با صنعت',
+          subtitle: 'راهکارهای نرم افزاری تخصصی',
+          heroImage: 'https://images.unsplash.com/photo-1763568258533-d0597f86ce62?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzb2Z0d2FyZSUyMGRldmVsb3BtZW50JTIwaW5kdXN0cmlhbCUyMGF1dG9tYXRpb24lMjB0ZWNobm9sb2d5fGVufDF8fHx8MTc3MTE4NDk3OHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
+          description: 'نانومهر با ارائه نرم افزارهای تخصصی، به بهبود فرآیندهای تولید و مدیریت در صنایع شیمیایی کمک می‌کند.',
+          features: [
+            'نرم افزار مدیریت تولید (ERP)',
+            'سیستم کنترل کیفیت (LIMS)',
+            'سیستم‌های اتوماسیون صنعتی (SCADA)'
+          ],
+          applications: [
+            'کارخانجات شیمیایی و پتروشیمی',
+            'واحدهای تولید پلیمر و رزین',
+            'آزمایشگاه‌های کنترل کیفیت'
+          ],
+          specifications: {
+            'استانداردهای کیفی': 'ISO 27001',
+            'پلتفرم': 'Web-Based, Desktop, Mobile',
+            'پشتیبانی': '24/7'
+          }
+        }
+      },
+      'cms:about': {
+        title: 'درباره نانومهر',
+        subtitle: 'پیشرو در صنعت شیمی و فناوری',
+        description: 'شرکت نانومهر از سال 1385 فعالیت خود را در زمینه تولید و توزیع مواد شیمیایی صنعتی آغاز کرده است. ما با تکیه بر دانش فنی روز و بهره‌گیری از تجربه کارشناسان مجرب، توانسته‌ایم جایگاه ویژه‌ای در صنعت کشور کسب کنیم.',
+        mission: 'ماموریت ما ارائه محصولات با کیفیت، خدمات مشتری‌مدار و نوآوری مستمر در صنعت شیمی و فناوری است.',
+        vision: 'چشم‌انداز ما تبدیل شدن به یکی از پیشروترین تولیدکنندگان و توزیع‌کنندگان مواد شیمیایی در خاورمیانه است.',
+        values: [
+          'کیفیت بالا در محصولات',
+          'نوآوری و تحقیق و توسعه',
+          'مسئولیت‌پذیری اجتماعی',
+          'رضایت مشتریان'
+        ]
+      },
+      'cms:customers': [
+        {
+          name: 'پتروشیمی تبریز',
+          logo: 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb21wYW55JTIwbG9nbyUyMGluZHVzdHJpYWx8ZW58MXx8fHwxNzY5NjUxMzQyfDA&ixlib=rb-4.1.0&q=80&w=400&utm_source=figma&utm_medium=referral',
+          industry: 'پتروشیمی'
+        },
+        {
+          name: 'ایران خودرو',
+          logo: 'https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhdXRvbW90aXZlJTIwY29tcGFueSUyMGxvZ298ZW58MXx8fHwxNzY5NjUxMzQzfDA&ixlib=rb-4.1.0&q=80&w=400&utm_source=figma&utm_medium=referral',
+          industry: 'خودروسازی'
+        },
+        {
+          name: 'صنایع رنگ‌سازی',
+          logo: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwYWludCUyMGNvbXBhbnklMjBsb2dvfGVufDF8fHx8MTc2OTY1MTM0NHww&ixlib=rb-4.1.0&q=80&w=400&utm_source=figma&utm_medium=referral',
+          industry: 'رنگ‌سازی'
+        }
+      ],
+      'cms:contact': {
+        phone: '021-12345678',
+        email: 'info@nanomehr.com',
+        address: 'تهران، خیابان ولیعصر، پلاک 123',
+        workingHours: 'شنبه تا پنجشنبه، 8 صبح تا 6 عصر',
+        socialMedia: {
+          instagram: 'nanomehr',
+          telegram: 'nanomehr',
+          linkedin: 'nanomehr'
+        }
+      },
+      'cms:footer': {
+        description: 'شرکت نانومهر، پیشرو در تولید و توزیع مواد شیمیایی صنعتی و راهکارهای نرم افزاری',
+        copyright: '© 1403 شرکت نانومهر. تمامی حقوق محفوظ است.',
+        links: {
+          aboutUs: 'درباره ما',
+          services: 'خدمات',
+          products: 'محصولات',
+          contact: 'تماس با ما'
+        }
+      },
+      'cms:settings': {
+        siteName: 'نانومهر',
+        siteUrl: 'https://nanomehr.com',
+        language: 'fa',
+        direction: 'rtl'
+      }
+    };
+
+    // Initialize all content
+    for (const [key, value] of Object.entries(defaultContent)) {
+      await kv.set(key, value);
+    }
+
+    return c.json({ 
+      success: true, 
+      message: 'Default content initialized successfully' 
+    });
+  } catch (error) {
+    console.log('Error initializing content:', error);
+    return c.json({ error: 'Failed to initialize content' }, 500);
+  }
+});
+
+// ============= BLOG/NEWS ROUTES =============
+
+// Get all blog posts
+app.get("/make-server-008a3150/cms/blog", async (c) => {
+  try {
+    const posts = await kv.getByPrefix('blog:');
+    return c.json({ posts });
+  } catch (error) {
+    console.log('Error fetching blog posts:', error);
+    return c.json({ error: 'Failed to fetch blog posts' }, 500);
+  }
+});
+
+// Get single blog post
+app.get("/make-server-008a3150/cms/blog/:id", async (c) => {
+  try {
+    const id = c.req.param('id');
+    const post = await kv.get(`blog:${id}`);
+    
+    if (!post) {
+      return c.json({ error: 'Blog post not found' }, 404);
+    }
+
+    return c.json({ post });
+  } catch (error) {
+    console.log('Error fetching blog post:', error);
+    return c.json({ error: 'Failed to fetch blog post' }, 500);
+  }
+});
+
+// Create blog post (protected)
+app.post("/make-server-008a3150/cms/blog", async (c) => {
+  const authHeader = c.req.header('Authorization');
+  const { authorized } = await authenticateUser(authHeader);
+
+  if (!authorized) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const body = await c.req.json();
+    const postId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    
+    const post = {
+      id: postId,
+      ...body,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    await kv.set(`blog:${postId}`, post);
+
+    return c.json({ success: true, post });
+  } catch (error) {
+    console.log('Error creating blog post:', error);
+    return c.json({ error: 'Failed to create blog post' }, 500);
+  }
+});
+
+// Update blog post (protected)
+app.put("/make-server-008a3150/cms/blog/:id", async (c) => {
+  const authHeader = c.req.header('Authorization');
+  const { authorized } = await authenticateUser(authHeader);
+
+  if (!authorized) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const id = c.req.param('id');
+    const body = await c.req.json();
+    
+    const existingPost = await kv.get(`blog:${id}`);
+    if (!existingPost) {
+      return c.json({ error: 'Blog post not found' }, 404);
+    }
+
+    const updatedPost = {
+      ...existingPost,
+      ...body,
+      updatedAt: new Date().toISOString()
+    };
+
+    await kv.set(`blog:${id}`, updatedPost);
+
+    return c.json({ success: true, post: updatedPost });
+  } catch (error) {
+    console.log('Error updating blog post:', error);
+    return c.json({ error: 'Failed to update blog post' }, 500);
+  }
+});
+
+// Delete blog post (protected)
+app.delete("/make-server-008a3150/cms/blog/:id", async (c) => {
+  const authHeader = c.req.header('Authorization');
+  const { authorized } = await authenticateUser(authHeader);
+
+  if (!authorized) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const id = c.req.param('id');
+    await kv.del(`blog:${id}`);
+
+    return c.json({ success: true, message: 'Blog post deleted' });
+  } catch (error) {
+    console.log('Error deleting blog post:', error);
+    return c.json({ error: 'Failed to delete blog post' }, 500);
+  }
+});
+
+Deno.serve(app.fetch);
