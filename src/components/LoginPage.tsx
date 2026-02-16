@@ -189,7 +189,7 @@ export function LoginPage({ onNavigate, onLoginSuccess }: LoginPageProps) {
         </div>
 
         {/* Register Link */}
-        <div className="text-center">
+        <div className="text-center space-y-3">
           <p className="text-gray-600 mb-4">
             حساب کاربری ندارید؟
           </p>
@@ -199,6 +199,16 @@ export function LoginPage({ onNavigate, onLoginSuccess }: LoginPageProps) {
           >
             ثبت‌نام کنید
           </button>
+          
+          {/* Admin Setup Link */}
+          <div className="pt-4 border-t border-gray-200 mt-4">
+            <button
+              onClick={() => onNavigate('admin-setup')}
+              className="text-xs text-gray-500 hover:text-gray-700 transition-colors underline"
+            >
+              راه‌اندازی اولیه ادمین
+            </button>
+          </div>
         </div>
 
         {/* Back to Home */}

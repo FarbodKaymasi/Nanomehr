@@ -1,5 +1,6 @@
 import { motion } from 'motion/react';
 import { Trophy, Award, Users, Target, TrendingUp, Shield, Calendar, MapPin, Microscope, Factory, Globe } from 'lucide-react';
+import { AUTHORS } from '../data/authors';
 
 const imgAboutHero = "https://images.unsplash.com/photo-1768128834301-7811be9d3a1f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjaGVtaWNhbCUyMGZhY3RvcnklMjBpbmR1c3RyaWFsJTIwcGxhbnR8ZW58MXx8fHwxNzY5NjI5MjM5fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral";
 const imgTeam = "https://images.unsplash.com/photo-1522071820081-009f0129c71c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxidXNpbmVzcyUyMHRlYW0lMjBtZWV0aW5nJTIwcHJvZmVzc2lvbmFsfGVufDF8fHx8MTc2OTY1MTI4M3ww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral";
@@ -49,36 +50,7 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
     }
   ];
 
-  const teamMembers = [
-    {
-      name: "دکتر محسن یعقوبیان",
-      position: "مدیرعامل و عضو هیئت مدیره",
-      experience: "۱۰ سال تجربه در صنعت شیمی",
-      image: "https://images.unsplash.com/photo-1758599543154-76ec1c4257df?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzc21hbiUyMHBvcnRyYWl0JTIwZ2xhc3Nlc3xlbnwxfHx8fDE3NzExMDg4OTN8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      delay: 0
-    },
-    {
-      name: "دکتر مسعود خواجه‌نوری",
-      position: "رئیس هیئت مدیره",
-      experience: "عضو هیئت علمی دانشگاه کاشان، مدیرگروه رشته مهندسی شیمی",
-      image: "https://images.unsplash.com/photo-1722938203650-99afb12419f8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtaWRkbGUlMjBlYXN0ZXJuJTIwYnVzaW5lc3NtYW4lMjBwcm9mZXNzaW9uYWx8ZW58MXx8fHwxNzcxMTU3NjE0fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      delay: 0.1
-    },
-    {
-      name: "مهندس امینی",
-      position: "نائب رئیس هیئت مدیره",
-      experience: "۱۰ سال تجربه در صنعت شیمی",
-      image: "https://images.unsplash.com/photo-1747811853766-7a6612797dc9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBlbmdpbmVlciUyMHBvcnRyYWl0fGVufDF8fHx8MTc3MTE1MjM0Mnww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      delay: 0.2
-    },
-    {
-      name: "خانم دکتر شیما شعبانی",
-      position: "دبیر",
-      experience: "۱۰ سال تجربه در صنعت شیمی",
-      image: "https://images.unsplash.com/photo-1581065178047-8ee15951ede6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHdvمانJTIwcG9ydHJhaXR8ZW58MXx8fHwxNzcxMTY3Nzg3fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      delay: 0.3
-    }
-  ];
+  const teamMembers = AUTHORS;
 
   const milestones = [
     {
@@ -365,12 +337,13 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {teamMembers.map((member, index) => (
               <motion.div
-                key={index}
-                className="group bg-white rounded-xl overflow-hidden border border-gray-200 hover:border-[#56CBD7] transition-all duration-300 hover:shadow-xl"
+                key={member.id}
+                onClick={() => onNavigate(`person-${member.id}`)}
+                className="group bg-white rounded-xl overflow-hidden border border-gray-200 hover:border-[#56CBD7] transition-all duration-300 hover:shadow-xl cursor-pointer"
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: member.delay }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
                 whileHover={{ y: -8 }}
               >
                 <div className="h-64 overflow-hidden relative">
@@ -379,11 +352,19 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
                     style={{ backgroundImage: `url('${member.image}')` }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+                  
+                  {/* Hover overlay with "مشاهده رزومه" */}
+                  <div className="absolute inset-0 bg-[#56CBD7]/0 group-hover:bg-[#56CBD7]/90 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <div className="text-white text-center">
+                      <div className="text-lg font-bold mb-2">مشاهده رزومه</div>
+                      <div className="w-12 h-0.5 bg-white mx-auto"></div>
+                    </div>
+                  </div>
                 </div>
                 <div className="p-6">
-                  <h3 className="text-xl font-medium text-black mb-1">{member.name}</h3>
-                  <p className="text-[#56CBD7] text-sm font-medium mb-2">{member.position}</p>
-                  <p className="text-[#1a2737]/70 text-xs">{member.experience}</p>
+                  <h3 className="text-xl font-medium text-black mb-1 group-hover:text-[#56CBD7] transition-colors">{member.name}</h3>
+                  <p className="text-[#56CBD7] text-sm font-medium mb-2">{member.title}</p>
+                  <p className="text-[#1a2737]/70 text-xs line-clamp-2">{member.experience}</p>
                 </div>
               </motion.div>
             ))}
@@ -412,12 +393,13 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {teamMembers.map((member, index) => (
               <motion.div
-                key={`author-${index}`}
-                className="group bg-white rounded-xl overflow-hidden border border-gray-200 hover:border-[#56CBD7] transition-all duration-300 hover:shadow-xl"
+                key={`author-${member.id}`}
+                onClick={() => onNavigate(`person-${member.id}`)}
+                className="group bg-white rounded-xl overflow-hidden border border-gray-200 hover:border-[#56CBD7] transition-all duration-300 hover:shadow-xl cursor-pointer"
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: member.delay }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
                 whileHover={{ y: -8 }}
               >
                 <div className="h-64 overflow-hidden relative">
@@ -426,11 +408,19 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
                     style={{ backgroundImage: `url('${member.image}')` }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+                  
+                  {/* Hover overlay with "مشاهده رزومه" */}
+                  <div className="absolute inset-0 bg-[#56CBD7]/0 group-hover:bg-[#56CBD7]/90 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <div className="text-white text-center">
+                      <div className="text-lg font-bold mb-2">مشاهده رزومه</div>
+                      <div className="w-12 h-0.5 bg-white mx-auto"></div>
+                    </div>
+                  </div>
                 </div>
                 <div className="p-6">
-                  <h3 className="text-xl font-medium text-black mb-1">{member.name}</h3>
-                  <p className="text-[#56CBD7] text-sm font-medium mb-2">{member.position}</p>
-                  <p className="text-[#1a2737]/70 text-xs">{member.experience}</p>
+                  <h3 className="text-xl font-medium text-black mb-1 group-hover:text-[#56CBD7] transition-colors">{member.name}</h3>
+                  <p className="text-[#56CBD7] text-sm font-medium mb-2">{member.title}</p>
+                  <p className="text-[#1a2737]/70 text-xs line-clamp-2">{member.experience}</p>
                 </div>
               </motion.div>
             ))}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, useScroll, useTransform } from 'motion/react';
 import { ImageWithFallback } from './components/figma/ImageWithFallback';
-import { Trophy, Microscope, Globe, Factory, Instagram, Send, Mail, MapPin, Phone, Calendar, User, ArrowRight } from 'lucide-react';
+import { Trophy, Microscope, Globe, Factory, Instagram, Send, Mail, MapPin, Phone, Calendar, User, ArrowRight, ChevronDown, Settings, LogOut } from 'lucide-react';
 import svgPaths from "./imports/svg-u4ngvccw05";
 import { ArticleDetail } from './components/ArticleDetail';
 import { ContactPage } from './components/ContactPage';
@@ -11,7 +11,12 @@ import { CMSPage } from './components/CMSPage';
 import { LoginPage } from './components/LoginPage';
 import { RegisterPage } from './components/RegisterPage';
 import { UserProfile } from './components/UserProfile';
+import { PersonProfile } from './components/PersonProfile';
+import { AdminSetup } from './pages/AdminSetup';
 import { ALL_ARTICLES } from './data/articles';
+import { ContentProvider, useContent } from './components/ContentProvider';
+import { CMSDebug } from './components/cms/CMSDebug';
+import { BlogPageCMS } from './components/BlogPageCMS';
 
 // Chemical industry images from Unsplash
 const imgHeroBackground = "https://images.unsplash.com/photo-1768128834301-7811be9d3a1f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjaGVtaWNhbCUyMGZhY3RvcnklMjBpbmR1c3RyaWFsJTIwcGxhbnR8ZW58MXx8fHwxNzY5NjI5MjM5fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral";
@@ -115,6 +120,7 @@ function Header({ currentPage, onNavigate }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState('');
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
 
   // Check if user is logged in
   useEffect(() => {
@@ -131,6 +137,19 @@ function Header({ currentPage, onNavigate }) {
       }
     }
   }, [currentPage]); // Re-check when page changes
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      const target = event.target;
+      if (!target.closest('.user-dropdown-container')) {
+        setUserDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const scrollToProducts = () => {
     // If not on home page, navigate to home first
@@ -202,13 +221,71 @@ function Header({ currentPage, onNavigate }) {
             <div className="flex items-center gap-4 md:gap-6">
               {/* User Profile or Login */}
               {isLoggedIn ? (
-                <button 
-                  onClick={() => onNavigate('profile')}
-                  className="hidden md:flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-colors"
-                >
-                  <User size={20} className="text-white" />
-                  <span className="text-white text-sm font-medium">{userName}</span>
-                </button>
+                <div className="hidden md:block relative user-dropdown-container">
+                  <button 
+                    onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                    className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-colors"
+                  >
+                    <User size={20} className="text-white" />
+                    <span className="text-white text-sm font-medium">{userName}</span>
+                    <ChevronDown size={16} className={`text-white transition-transform ${userDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {userDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="absolute left-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-50"
+                    >
+                      <div className="p-3 bg-gradient-to-r from-[#56CBD7] to-[#45b9c5] text-white">
+                        <p className="text-sm font-medium truncate">{userName}</p>
+                        <p className="text-xs text-white/80">مدیر سیستم</p>
+                      </div>
+                      
+                      <div className="py-2">
+                        <button
+                          onClick={() => {
+                            setUserDropdownOpen(false);
+                            onNavigate('profile');
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-100 transition-colors text-right"
+                        >
+                          <User size={18} className="text-gray-700" />
+                          <span className="text-gray-700 font-medium">پروفایل من</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setUserDropdownOpen(false);
+                            onNavigate('cms');
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-100 transition-colors text-right"
+                        >
+                          <Settings size={18} className="text-gray-700" />
+                          <span className="text-gray-700 font-medium">پنل مدیریت CMS</span>
+                        </button>
+
+                        <div className="h-px bg-gray-200 my-2"></div>
+
+                        <button
+                          onClick={() => {
+                            setUserDropdownOpen(false);
+                            localStorage.removeItem('user_token');
+                            localStorage.removeItem('user_data');
+                            onNavigate('home');
+                            window.location.reload();
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 transition-colors text-right"
+                        >
+                          <LogOut size={18} className="text-red-600" />
+                          <span className="text-red-600 font-medium">خروج از حساب</span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
               ) : (
                 <div className="hidden md:flex items-center gap-2">
                   <button 
@@ -286,7 +363,66 @@ function Header({ currentPage, onNavigate }) {
               >
                 تماس با ما
               </button>
-              <div className="flex items-center gap-2 text-white/70 text-sm pt-2">
+
+              {/* Mobile User Menu */}
+              {isLoggedIn ? (
+                <div className="pt-4 border-t border-white/10">
+                  <div className="bg-white/10 rounded-lg p-3 mb-3">
+                    <div className="flex items-center gap-2 text-white mb-1">
+                      <User size={18} />
+                      <span className="text-sm font-medium">{userName}</span>
+                    </div>
+                    <span className="text-xs text-white/70">مدیر سیستم</span>
+                  </div>
+                  
+                  <button
+                    onClick={() => { onNavigate('profile'); setMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-right mb-2"
+                  >
+                    <User size={18} className="text-white" />
+                    <span className="text-white font-medium">پروفایل من</span>
+                  </button>
+
+                  <button
+                    onClick={() => { onNavigate('cms'); setMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-right mb-2"
+                  >
+                    <Settings size={18} className="text-white" />
+                    <span className="text-white font-medium">پنل مدیریت CMS</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem('user_token');
+                      localStorage.removeItem('user_data');
+                      setMenuOpen(false);
+                      onNavigate('home');
+                      window.location.reload();
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-colors text-right"
+                  >
+                    <LogOut size={18} className="text-red-400" />
+                    <span className="text-red-400 font-medium">خروج از حساب</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="pt-4 border-t border-white/10 flex flex-col gap-2">
+                  <button
+                    onClick={() => { onNavigate('login'); setMenuOpen(false); }}
+                    className="w-full px-4 py-3 bg-white/10 hover:bg-white/20 rounded-lg text-white font-medium transition-colors"
+                  >
+                    ورود
+                  </button>
+                  <button
+                    onClick={() => { onNavigate('register'); setMenuOpen(false); }}
+                    className="w-full px-4 py-3 bg-[#56CBD7] hover:bg-[#45b9c5] rounded-lg text-white font-medium transition-colors"
+                  >
+                    ثبت‌نام
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 text-white/70 text-sm pt-2 border-t border-white/10 mt-2">
                 <Phone size={16} />
                 <span dir="ltr">031-33333333</span>
               </div>
@@ -299,11 +435,14 @@ function Header({ currentPage, onNavigate }) {
 }
 
 function HeroSection() {
+  const { content, loading } = useContent();
+  const hero = content.hero || {};
+  
   return (
     <section 
       className="relative h-[921px] bg-gradient-to-br from-[#0a1221] to-[#1a2737] flex items-center justify-center overflow-hidden"
       style={{
-        backgroundImage: `linear-gradient(rgba(10, 18, 33, 0.85) 0%, rgba(26, 39, 55, 0.9) 100%), url('${imgHeroBackground}')`,
+        backgroundImage: `linear-gradient(rgba(10, 18, 33, 0.85) 0%, rgba(26, 39, 55, 0.9) 100%), url('${hero.backgroundImage || imgHeroBackground}')`,
         backgroundSize: 'auto, cover',
         backgroundPosition: '0% 0%, center center',
         backgroundRepeat: 'no-repeat'
@@ -324,8 +463,7 @@ function HeroSection() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
             >
-              پیشرو در صنعت<br />
-              شیمی ایران
+              {loading ? 'پیشرو در صنعت شیمی ایران' : (hero.title || 'پیشرو در صنعت شیمی ایران')}
             </motion.h1>
 
             <motion.p 
@@ -334,7 +472,7 @@ function HeroSection() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
             >
-              تولید و توزیع مواد شیمیایی صنعتی، پلیمرها، رنگ‌های صنعتی و ارائه راهکارهای نرم افزاری تخصصی با بالاترین استانداردهای کیفی
+              {loading ? 'تولید و توزیع مواد شیمیایی صنعتی...' : (hero.description || hero.subtitle || 'تولید و توزیع مواد شیمیایی صنعتی، پلیمرها، رنگ‌های صنعتی و ارائه راهکارهای نرم افزاری تخصصی با بالاترین استانداردهای کیفی')}
             </motion.p>
 
             {/* Call to Action */}
@@ -491,9 +629,13 @@ function ServiceCard({ image, title, number, description, isHovered, onHover, on
 
 function ServicesSection({ onNavigate }) {
   const [hoveredIndex, setHoveredIndex] = useState(null);
-
-  const services = [
+  const { content } = useContent();
+  
+  // Use CMS content if available, otherwise use default
+  const cmsServices = content.services || [];
+  const defaultServices = [
     { 
+      id: 'polymer',
       image: imgPolymer, 
       title: "مواد پلیمری", 
       number: "01",
@@ -501,6 +643,7 @@ function ServicesSection({ onNavigate }) {
       productId: "polymer"
     },
     { 
+      id: 'paint',
       image: imgPaint, 
       title: "رنگ‌های صنعتی", 
       number: "02",
@@ -508,6 +651,7 @@ function ServicesSection({ onNavigate }) {
       productId: "paint"
     },
     { 
+      id: 'fertilizer',
       image: imgFertilizer, 
       title: "کود و سموم", 
       number: "03",
@@ -515,6 +659,7 @@ function ServicesSection({ onNavigate }) {
       productId: "fertilizer"
     },
     { 
+      id: 'software',
       image: "https://images.unsplash.com/photo-1763568258533-d0597f86ce62?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzb2Z0d2FyZSUyMGRldmVsb3BtZW50JTIwaW5kdXN0cmlhbCUyMGF1dG9tYXRpb24lMjB0ZWNobm9sb2d5fGVufDF8fHx8MTc3MTE4NDk3OHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral", 
       title: "نرم افزارهای مرتبط با صنعت", 
       number: "04",
@@ -522,6 +667,14 @@ function ServicesSection({ onNavigate }) {
       productId: "software"
     }
   ];
+
+  // Map CMS services to include productId
+  const services = cmsServices.length > 0 
+    ? cmsServices.map((service: any) => ({
+        ...service,
+        productId: service.id || service.productId
+      }))
+    : defaultServices;
 
   return (
     <section className="py-16 bg-gray-50" id="products">
@@ -1050,61 +1203,117 @@ function Footer({ onNavigate }) {
 }
 
 function ArticlesSection({ onNavigate }) {
-  const articles = ALL_ARTICLES.slice(0, 4);
+  const [articles, setArticles] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadArticles = async () => {
+      try {
+        const { projectId, publicAnonKey } = await import('./utils/supabase/info');
+        const response = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/make-server-008a3150/cms/blog`,
+          {
+            headers: {
+              'Authorization': `Bearer ${publicAnonKey}`
+            }
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const publishedPosts = (data.posts || [])
+            .filter((post: any) => post.status === 'published' || !post.status)
+            .slice(0, 4);
+          setArticles(publishedPosts);
+        }
+      } catch (error) {
+        console.error('Error loading articles:', error);
+        // Fallback to static articles if CMS fails
+        setArticles(ALL_ARTICLES.slice(0, 4));
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadArticles();
+  }, []);
+
+  if (loading) {
+    return (
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
+          <div className="flex items-center justify-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#56CBD7]"></div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="py-20 bg-white">
       <div className="max-w-7xl mx-auto px-4 md:px-8">
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-[56px] font-medium leading-[1.1] tracking-[-1.12px] text-black mb-6">
-            مقالات
+            مقالات و اخبار
           </h2>
           <p className="text-[#1a2737]/70 text-lg max-w-3xl mx-auto">
-            مجموعه‌ای منتخب از محصولات پرفروش با کیفیت تضمین شده
+            آخرین مقالات تخصصی و اخبار صنعت شیمی
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {articles.map((article, index) => (
-            <div 
-              key={index} 
-              onClick={() => onNavigate('article', article.id)}
-              className="group bg-white rounded-xl overflow-hidden border border-gray-200 hover:border-[#56CBD7] transition-all duration-300 hover:shadow-xl hover:-translate-y-2 cursor-pointer"
-            >
-              <div className="h-48 overflow-hidden relative">
-                <ImageWithFallback 
-                  src={article.image} 
-                  alt={article.title}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                />
-                <div className="absolute top-4 right-4 bg-[#56CBD7] text-white text-xs px-3 py-1 rounded-full">
-                  {article.category}
+        {articles.length > 0 ? (
+          <>
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+              {articles.map((article, index) => (
+                <div 
+                  key={article.id || index} 
+                  onClick={() => onNavigate('article', article.id)}
+                  className="group bg-white rounded-xl overflow-hidden border border-gray-200 hover:border-[#56CBD7] transition-all duration-300 hover:shadow-xl hover:-translate-y-2 cursor-pointer"
+                >
+                  <div className="h-48 overflow-hidden relative">
+                    <ImageWithFallback 
+                      src={article.image || article.coverImage || 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=800'} 
+                      alt={article.title}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    />
+                    {article.category && (
+                      <div className="absolute top-4 right-4 bg-[#56CBD7] text-white text-xs px-3 py-1 rounded-full">
+                        {article.category}
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-6">
+                    <h3 className="text-xl font-medium text-black mb-2 line-clamp-2">{article.title}</h3>
+                    <p className="text-[#1a2737]/70 text-sm mb-4 line-clamp-2">
+                      {article.excerpt || article.description || article.content?.substring(0, 100)}
+                    </p>
+                    <div className="text-[#56CBD7] text-sm font-medium flex items-center gap-2 group-hover:gap-3 transition-all">
+                      اطلاعات بیشتر
+                      <ArrowIcon className="scale-y-[-1] text-[#56CBD7]" />
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="p-6">
-                <h3 className="text-xl font-medium text-black mb-2">{article.title}</h3>
-                <p className="text-[#1a2737]/70 text-sm mb-4">{article.description}</p>
-                <div className="text-[#56CBD7] text-sm font-medium flex items-center gap-2 group-hover:gap-3 transition-all">
-                  اطلاعات بیشتر
-                  <ArrowIcon className="scale-y-[-1] text-[#56CBD7]" />
-                </div>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* View All Button */}
-        <div className="text-center">
-          <motion.button
-            onClick={() => onNavigate('blog')}
-            className="inline-flex items-center gap-3 bg-[#56CBD7] hover:bg-[#45b9c5] text-white px-8 py-4 rounded-lg text-base font-medium transition-colors"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            مشاهده همه مقالات
-            <ArrowIcon className="scale-y-[-1]" />
-          </motion.button>
-        </div>
+            {/* View All Button */}
+            <div className="text-center">
+              <motion.button
+                onClick={() => onNavigate('blog')}
+                className="inline-flex items-center gap-3 bg-[#56CBD7] hover:bg-[#45b9c5] text-white px-8 py-4 rounded-lg text-base font-medium transition-colors"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                مشاهده همه مقالات
+                <ArrowIcon className="scale-y-[-1]" />
+              </motion.button>
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-10">
+            <p className="text-gray-500">به زودی مقالات جدید منتشر خواهد شد</p>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -1255,10 +1464,12 @@ function HomePage({ onNavigate }) {
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('home');
-  const [selectedArticleId, setSelectedArticleId] = useState<number | null>(null);
+  const [selectedArticleId, setSelectedArticleId] = useState<number | string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userToken, setUserToken] = useState<string | null>(null);
+  const [cmsArticles, setCmsArticles] = useState<any[]>([]);
 
   // Check URL hash on mount for CMS access
   useEffect(() => {
@@ -1266,6 +1477,33 @@ export default function App() {
     if (hash === 'cms') {
       setCurrentPage('cms');
     }
+
+    // Load CMS articles
+    const loadCmsArticles = async () => {
+      try {
+        const { projectId, publicAnonKey } = await import('./utils/supabase/info');
+        const response = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/make-server-008a3150/cms/blog`,
+          {
+            headers: {
+              'Authorization': `Bearer ${publicAnonKey}`
+            }
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const publishedPosts = (data.posts || []).filter((post: any) => 
+            post.status === 'published' || !post.status
+          );
+          setCmsArticles(publishedPosts);
+        }
+      } catch (error) {
+        console.error('Error loading CMS articles:', error);
+      }
+    };
+    
+    loadCmsArticles();
 
     // Check if user is logged in
     const token = localStorage.getItem('user_token');
@@ -1305,13 +1543,20 @@ export default function App() {
     localStorage.removeItem('user_data');
   };
 
-  const handleNavigate = (page: string, articleId?: number, productId?: string) => {
-    setCurrentPage(page);
-    if (articleId) {
-      setSelectedArticleId(articleId);
-    }
-    if (productId) {
-      setSelectedProductId(productId);
+  const handleNavigate = (page: string, articleId?: number | string, productId?: string) => {
+    // Check if page starts with "person-" to extract person ID
+    if (page.startsWith('person-')) {
+      const personId = page.replace('person-', '');
+      setCurrentPage('person');
+      setSelectedPersonId(personId);
+    } else {
+      setCurrentPage(page);
+      if (articleId !== undefined) {
+        setSelectedArticleId(articleId);
+      }
+      if (productId) {
+        setSelectedProductId(productId);
+      }
     }
     
     // Update hash for CMS
@@ -1326,67 +1571,86 @@ export default function App() {
   };
 
   const selectedArticle = selectedArticleId 
-    ? ALL_ARTICLES.find(article => article.id === selectedArticleId)
+    ? (cmsArticles.find(article => article.id === selectedArticleId) || 
+       ALL_ARTICLES.find(article => article.id === selectedArticleId))
     : null;
 
+  const allArticles = [...cmsArticles, ...ALL_ARTICLES];
+
   return (
-    <div className="min-h-screen">
-      {currentPage === 'home' && <HomePage onNavigate={handleNavigate} />}
-      {currentPage === 'blog' && <BlogPage onNavigate={handleNavigate} />}
-      {currentPage === 'article' && selectedArticle && (
-        <>
-          <Header currentPage="article" onNavigate={handleNavigate} />
-          <ArticleDetail 
-            article={selectedArticle} 
-            allArticles={ALL_ARTICLES}
-            onNavigate={handleNavigate} 
+    <ContentProvider>
+      <div className="min-h-screen">
+        {currentPage === 'home' && <HomePage onNavigate={handleNavigate} />}
+        {currentPage === 'blog' && <BlogPageCMS onNavigate={handleNavigate} Header={Header} Footer={Footer} />}
+        {currentPage === 'article' && selectedArticle && (
+          <>
+            <Header currentPage="article" onNavigate={handleNavigate} />
+            <ArticleDetail 
+              article={selectedArticle} 
+              allArticles={allArticles}
+              onNavigate={handleNavigate} 
+            />
+            <Footer onNavigate={handleNavigate} />
+          </>
+        )}
+        {currentPage === 'product' && selectedProductId && (
+          <>
+            <Header currentPage="product" onNavigate={handleNavigate} />
+            <ProductPage 
+              productId={selectedProductId}
+              onNavigate={handleNavigate} 
+            />
+            <Footer onNavigate={handleNavigate} />
+          </>
+        )}
+        {currentPage === 'contact' && (
+          <>
+            <Header currentPage="contact" onNavigate={handleNavigate} />
+            <ContactPage onNavigate={handleNavigate} />
+            <Footer onNavigate={handleNavigate} />
+          </>
+        )}
+        {currentPage === 'about' && (
+          <>
+            <Header currentPage="about" onNavigate={handleNavigate} />
+            <AboutPage onNavigate={handleNavigate} />
+            <Footer onNavigate={handleNavigate} />
+          </>
+        )}
+        {currentPage === 'login' && (
+          <LoginPage 
+            onNavigate={handleNavigate}
+            onLoginSuccess={handleLoginSuccess}
           />
-          <Footer onNavigate={handleNavigate} />
-        </>
-      )}
-      {currentPage === 'product' && selectedProductId && (
-        <>
-          <Header currentPage="product" onNavigate={handleNavigate} />
-          <ProductPage 
-            productId={selectedProductId}
-            onNavigate={handleNavigate} 
+        )}
+        {currentPage === 'register' && (
+          <RegisterPage 
+            onNavigate={handleNavigate}
+            onRegisterSuccess={handleLoginSuccess}
           />
-          <Footer onNavigate={handleNavigate} />
-        </>
-      )}
-      {currentPage === 'contact' && (
-        <>
-          <Header currentPage="contact" onNavigate={handleNavigate} />
-          <ContactPage onNavigate={handleNavigate} />
-          <Footer onNavigate={handleNavigate} />
-        </>
-      )}
-      {currentPage === 'about' && (
-        <>
-          <Header currentPage="about" onNavigate={handleNavigate} />
-          <AboutPage onNavigate={handleNavigate} />
-          <Footer onNavigate={handleNavigate} />
-        </>
-      )}
-      {currentPage === 'login' && (
-        <LoginPage 
-          onNavigate={handleNavigate}
-          onLoginSuccess={handleLoginSuccess}
-        />
-      )}
-      {currentPage === 'register' && (
-        <RegisterPage 
-          onNavigate={handleNavigate}
-          onRegisterSuccess={handleLoginSuccess}
-        />
-      )}
-      {currentPage === 'profile' && (
-        <UserProfile 
-          onNavigate={handleNavigate}
-          onLogout={handleLogout}
-        />
-      )}
-      {currentPage === 'cms' && <CMSPage />}
-    </div>
+        )}
+        {currentPage === 'profile' && (
+          <UserProfile 
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+          />
+        )}
+        {currentPage === 'cms' && <CMSPage />}
+        {currentPage === 'cms-debug' && <CMSDebug />}
+        {currentPage === 'admin-setup' && (
+          <AdminSetup onNavigate={handleNavigate} />
+        )}
+        {currentPage === 'person' && selectedPersonId && (
+          <>
+            <Header currentPage="person" onNavigate={handleNavigate} />
+            <PersonProfile 
+              personId={selectedPersonId}
+              onNavigate={handleNavigate} 
+            />
+            <Footer onNavigate={handleNavigate} />
+          </>
+        )}
+      </div>
+    </ContentProvider>
   );
 }

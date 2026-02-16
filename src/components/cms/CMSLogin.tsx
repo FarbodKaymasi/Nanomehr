@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Lock, Mail, Eye, EyeOff, LogIn } from 'lucide-react';
-import { projectId, publicAnonKey } from '../../utils/supabase/info';
+import { signIn } from '../../utils/supabase/client';
 
 interface CMSLoginProps {
   onLogin: (token: string, user: any) => void;
@@ -20,26 +20,22 @@ export function CMSLogin({ onLogin }: CMSLoginProps) {
     setLoading(true);
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-008a3150/auth/signin`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`
-          },
-          body: JSON.stringify({ email, password })
-        }
-      );
+      console.log('Attempting login for:', email);
+      
+      // Use singleton client for sign in
+      const data = await signIn(email, password);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'خطا در ورود به سیستم');
+      if (!data.session || !data.user) {
+        throw new Error('خطا در دریافت اطلاعات کاربر');
       }
 
-      onLogin(data.access_token, data.user);
+      console.log('Login successful!');
+      console.log('Token:', data.session.access_token.substring(0, 20) + '...');
+      console.log('User:', data.user.email);
+
+      onLogin(data.session.access_token, data.user);
     } catch (err: any) {
+      console.error('Login error:', err);
       setError(err.message || 'خطا در اتصال به سرور');
     } finally {
       setLoading(false);
