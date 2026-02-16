@@ -1,4 +1,4 @@
-@import url('https://cdn.jsdelivr.net/gh/rastikerdar/yekan-bakh-font@3.0.0/dist/font-face.css');
+@import url('./fonts/YekanBakhFaNum-Regular.ttf');
 
 @custom-variant dark (&:is(.dark *));
 
